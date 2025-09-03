@@ -16,7 +16,8 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           prompt: prompt,
-          output_format: "png"
+          output_format: "png",
+          aspect_ratio: "1:1"   // tambahin biar nggak 400
         }),
       }
     );
@@ -27,11 +28,9 @@ export default async function handler(req, res) {
       return res.status(response.status).json({ error: errorText });
     }
 
-    // Ambil gambar (binary)
     const arrayBuffer = await response.arrayBuffer();
     const base64Image = Buffer.from(arrayBuffer).toString("base64");
 
-    // Kirim balik dengan prefix data URI
     res.status(200).json({
       image: `data:image/png;base64,${base64Image}`
     });
