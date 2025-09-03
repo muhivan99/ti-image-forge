@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Neon Effects */
+.neon-text {
+  text-shadow: 0 0 5px #a855f7, 0 0 10px #9333ea, 0 0 20px #7e22ce;
+}
+
+.neon-input {
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
+}
+
+.neon-button {
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.8);
+}
+
+.neon-card {
+  box-shadow: 0 0 25px rgba(168, 85, 247, 0.7);
+}
