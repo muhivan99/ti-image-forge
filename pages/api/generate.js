@@ -12,7 +12,7 @@ export default async function handler(req, res) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json",
+          Accept: "application/json", // penting supaya dapat base64
           Authorization: `Bearer ${process.env.STABILITY_API_KEY}`,
         },
         body: JSON.stringify({
@@ -20,19 +20,26 @@ export default async function handler(req, res) {
           cfg_scale: 7,
           width: 512,
           height: 512,
-          samples: 1
+          samples: 1,
         }),
       }
     );
 
     if (!response.ok) {
-      throw new Error(`Stability API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error("API error:", errorText);
+      return res.status(500).json({ error: "Stability API error", details: errorText });
     }
 
     const data = await response.json();
+
+    if (!data.artifacts || !data.artifacts[0]) {
+      return res.status(500).json({ error: "No image returned from API" });
+    }
+
     res.status(200).json({ image: data.artifacts[0].base64 });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to generate image" });
+    console.error("Server error:", err);
+    res.status(500).json({ error: "Server error", details: err.message });
   }
 }
