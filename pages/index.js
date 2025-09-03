@@ -7,16 +7,16 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   async function generateImage() {
-    setLoading(true);
-    const res = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
-    });
-    const data = await res.json();
-    setImage(`data:image/png;base64,${data.image}`);
-    setLoading(false);
-  }
+  setLoading(true);
+  const res = await fetch("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await res.json();
+  setImage(data.image);   // ⬅️ cukup ini
+  setLoading(false);
+}
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-black via-indigo-950 to-purple-950 text-white p-8">
