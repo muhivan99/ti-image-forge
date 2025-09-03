@@ -12,10 +12,11 @@ export default async function handler(req, res) {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${process.env.STABILITY_API_KEY}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           prompt: prompt,
-          output_format: "png",
+          output_format: "png"
         }),
       }
     );
@@ -26,7 +27,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Stability API error", details: errorText });
     }
 
-    // Response biasanya berupa arrayBuffer (image)
     const arrayBuffer = await response.arrayBuffer();
     const base64Image = Buffer.from(arrayBuffer).toString("base64");
 
