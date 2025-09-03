@@ -27,10 +27,12 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Stability API error", details: errorText });
     }
 
+    // Dapatkan binary image
     const arrayBuffer = await response.arrayBuffer();
     const base64Image = Buffer.from(arrayBuffer).toString("base64");
 
-    res.status(200).json({ image: base64Image });
+    // Kirim balik dengan prefix data URI
+    res.status(200).json({ image: `data:image/png;base64,${base64Image}` });
   } catch (err) {
     console.error("Server error:", err);
     res.status(500).json({ error: "Server error", details: err.message });
