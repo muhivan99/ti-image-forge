@@ -2,19 +2,20 @@
 import { useState } from "react";
 
 export default function Home() {
-  const [prompt, setPrompt] = useState("");
-  const [image, setImage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [width, setWidth] = useState(512);
+  const [height, setHeight] = useState(512);
+  const [guidance, setGuidance] = useState(7.5);
+  const [steps, setSteps] = useState(30);
 
-  async function generateImage() {
+async function generateImage() {
   setLoading(true);
   const res = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, width, height, guidance, steps }),
   });
   const data = await res.json();
-  setImage(data.image);   // ⬅️ cukup ini
+  setImage(data.image);
   setLoading(false);
 }
 
