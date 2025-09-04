@@ -2,6 +2,9 @@
 import { useState } from "react";
 
 export default function Home() {
+  const [prompt, setPrompt] = useState("");   // ✅ ini wajib ada
+  const [image, setImage] = useState("");
+  const [loading, setLoading] = useState(false);
   const [width, setWidth] = useState(512);
   const [height, setHeight] = useState(512);
   const [guidance, setGuidance] = useState(7.5);
@@ -12,7 +15,7 @@ async function generateImage() {
   const res = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, width, height, guidance, steps }),
+    body: JSON.stringify({ prompt, width, height, guidance, steps })
   });
   const data = await res.json();
   setImage(data.image);
@@ -28,11 +31,11 @@ async function generateImage() {
 
       <div className="flex gap-2 mb-6">
         <input
-          type="text"
-          className="w-80 p-3 rounded-lg border border-purple-500 bg-black text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 neon-input"
-          placeholder="Contoh: robot pakai jaket almamater"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+        type="text"
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        placeholder="Contoh: robot pakai jaket almamater"
+        className="w-80 p-3 rounded-lg border border-purple-500 bg-black text-white"
         />
         <button
           onClick={generateImage}
