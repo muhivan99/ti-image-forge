@@ -4,30 +4,33 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Validasi API key
-  if (!process.env.HF_API_KEY) {
-    console.error("HF_API_KEY not found in environment variables");
-    return res.status(500).json({ error: "API key not configured" });
-  }
+  // Gunakan API key yang disediakan
+  const GOOGLE_AI_API_KEY = "AIzaSyC1oxvEkt5tXA46RE2Nt6wvrDCQrb98ACw";
 
   // Destructure dan validasi request body
-  const { prompt, width, height, guidance, steps, negative_prompt } = req.body;
+  const { prompt, aspectRatio, seed, negative_prompt } = req.body;
 
   if (!prompt || prompt.trim() === "") {
     return res.status(400).json({ error: "Prompt is required" });
   }
 
-  // Sanitasi dan batasi parameter
-  const sanitizedParams = {
-    width: Math.min(Math.max(width || 512, 256), 1024), // Min 256, Max 1024
-    height: Math.min(Math.max(height || 512, 256), 1024),
-    guidance_scale: Math.min(Math.max(guidance || 7.5, 1), 20), // Min 1, Max 20
-    num_inference_steps: Math.min(Math.max(steps || 28, 10), 50), // Min 10, Max 50
+  // Validasi aspect ratio untuk Google AI Studio
+  const validAspectRatios = ["1:1", "9:16", "16:9", "4:3", "3:4"];
+  const finalAspectRatio = validAspectRatios.includes(aspectRatio) ? aspectRatio : "1:1";
+
+  // Build request body untuk Google AI Studio
+  const requestBody = {
+    prompt: prompt.trim(),
+    ...(finalAspectRatio && { aspectRatio: finalAspectRatio }),
+    ...(seed && typeof seed === 'number' && { seed }),
+    ...(negative_prompt && { negativePrompt: negative_prompt.trim() }),
   };
 
   console.log("Request params:", {
     prompt: prompt.substring(0, 50) + "...",
-    ...sanitizedParams
+    aspectRatio: finalAspectRatio,
+    seed,
+    hasNegativePrompt: !!negative_prompt
   });
 
   const maxRetries = 3;
@@ -37,22 +40,15 @@ export default async function handler(req, res) {
     try {
       console.log(`Attempt ${retryCount + 1} of ${maxRetries}`);
       
+      // Google AI Studio Imagen API endpoint
       const response = await fetch(
-        "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-3.5-medium",
+        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:generateImage?key=${GOOGLE_AI_API_KEY}`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${process.env.HF_API_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            inputs: prompt.trim(),
-            parameters: {
-              ...sanitizedParams,
-              // Tambahkan negative prompt jika ada
-              ...(negative_prompt && { negative_prompt: negative_prompt.trim() }),
-            },
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -61,17 +57,17 @@ export default async function handler(req, res) {
 
       // Handle berbagai status response
       if (response.status === 503) {
-        // Model sedang loading
+        // Service unavailable
         const errorData = await response.text();
-        console.log("Model loading, retrying in 15 seconds...", errorData);
+        console.log("Service unavailable, retrying in 10 seconds...", errorData);
         
         if (retryCount < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 15000));
+          await new Promise(resolve => setTimeout(resolve, 10000));
           retryCount++;
           continue;
         } else {
           return res.status(503).json({ 
-            error: "Model is currently loading. Please try again in a few minutes.",
+            error: "Service is currently unavailable. Please try again in a few minutes.",
             details: errorData
           });
         }
@@ -82,67 +78,78 @@ export default async function handler(req, res) {
         const retryAfter = response.headers.get('retry-after') || 60;
         return res.status(429).json({ 
           error: "Rate limit exceeded",
-          retryAfter: parseInt(retryAfter)
+          retryAfter: parseInt(retryAfter),
+          message: "Please try again later"
         });
       }
 
       if (response.status === 400) {
         // Bad request - biasanya prompt issue
-        const errorText = await response.text();
-        console.error("Bad request:", errorText);
+        const errorData = await response.json();
+        console.error("Bad request:", errorData);
         return res.status(400).json({ 
           error: "Invalid request parameters",
-          details: errorText
+          details: errorData.error?.message || errorData
         });
       }
 
-      if (response.status === 401) {
-        // Unauthorized - API key issue
-        console.error("Unauthorized - check API key");
-        return res.status(401).json({ 
-          error: "Invalid API key" 
+      if (response.status === 401 || response.status === 403) {
+        // Unauthorized/Forbidden - API key issue
+        const errorData = await response.json();
+        console.error("Authentication error:", errorData);
+        return res.status(response.status).json({ 
+          error: "Invalid API key or insufficient permissions",
+          details: errorData.error?.message || "Check your Google AI API key"
         });
       }
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`HF API error (${response.status}):`, errorText);
+        console.error(`Google AI API error (${response.status}):`, errorText);
         return res.status(response.status).json({ 
           error: `API request failed: ${response.status}`,
           details: errorText
         });
       }
 
-      // Cek content type
-      const contentType = response.headers.get('content-type');
-      console.log("Response content-type:", contentType);
+      // Parse JSON response dari Google AI Studio
+      const data = await response.json();
+      console.log("Response structure:", Object.keys(data));
 
-      if (!contentType || !contentType.includes('image')) {
-        // Jika bukan image, mungkin error response dalam JSON
-        const textResponse = await response.text();
-        console.error("Expected image but got:", textResponse);
+      // Google AI Studio mengembalikan response dengan struktur:
+      // { generatedImages: [{ bytesBase64Encoded: "..." }] }
+      if (!data.generatedImages || !Array.isArray(data.generatedImages) || data.generatedImages.length === 0) {
+        console.error("Unexpected response structure:", data);
         return res.status(500).json({ 
-          error: "Unexpected response format",
-          details: textResponse
+          error: "Unexpected response format from Google AI",
+          details: "No generated images found in response"
         });
       }
 
-      // Process image response
-      const arrayBuffer = await response.arrayBuffer();
+      const generatedImage = data.generatedImages[0];
       
-      if (arrayBuffer.byteLength === 0) {
-        throw new Error("Empty response from API");
+      if (!generatedImage.bytesBase64Encoded) {
+        console.error("No base64 data in response:", generatedImage);
+        return res.status(500).json({ 
+          error: "No image data received",
+          details: "Missing base64 encoded image data"
+        });
       }
 
-      const base64Image = Buffer.from(arrayBuffer).toString("base64");
-      
-      console.log("Image generated successfully, size:", arrayBuffer.byteLength, "bytes");
+      console.log("Image generated successfully with Google AI Studio");
       
       return res.status(200).json({
         success: true,
-        image: `data:image/png;base64,${base64Image}`,
-        parameters: sanitizedParams,
-        prompt: prompt.trim(),
+        image: `data:image/png;base64,${generatedImage.bytesBase64Encoded}`,
+        parameters: {
+          prompt: prompt.trim(),
+          aspectRatio: finalAspectRatio,
+          seed,
+          negativePrompt: negative_prompt
+        },
+        // Include metadata jika tersedia
+        ...(data.modelVersion && { modelVersion: data.modelVersion }),
+        ...(generatedImage.mimeType && { mimeType: generatedImage.mimeType }),
       });
 
     } catch (err) {
@@ -163,16 +170,31 @@ export default async function handler(req, res) {
   }
 }
 
-// Helper function untuk test API key (optional, buat endpoint terpisah)
-export async function testApiKey(apiKey) {
+// Helper function untuk test Google AI API key
+export async function testApiKey() {
+  const GOOGLE_AI_API_KEY = "AIzaSyC1oxvEkt5tXA46RE2Nt6wvrDCQrb98ACw";
+  
   try {
-    const response = await fetch("https://huggingface.co/api/whoami-v2", {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
-    return response.ok;
+    // Test dengan model list endpoint
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${GOOGLE_AI_API_KEY}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log("Available models:", data.models?.length || 0);
+      return true;
+    }
+    
+    console.error("API key test failed:", response.status);
+    return false;
   } catch (err) {
+    console.error("API key test error:", err);
     return false;
   }
 }
